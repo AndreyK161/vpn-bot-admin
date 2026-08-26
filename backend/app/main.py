@@ -4,6 +4,10 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.auth import router as auth_router
+from app.api.events import router as events_router
+from app.api.ingest import router as ingest_router
+from app.api.messages import router as messages_router
+from app.api.templates import router as templates_router
 from app.core.config import settings
 from app.core.database import get_db
 
@@ -18,6 +22,10 @@ app.add_middleware(
 )
 
 app.include_router(auth_router)
+app.include_router(ingest_router)
+app.include_router(messages_router)
+app.include_router(events_router)
+app.include_router(templates_router)
 
 
 @app.get("/api/health")

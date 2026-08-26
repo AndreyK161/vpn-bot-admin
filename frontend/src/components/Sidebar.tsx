@@ -1,19 +1,12 @@
 import { NavLink, useNavigate } from "react-router-dom";
-import {
-  LayoutDashboard,
-  Boxes,
-  Layers,
-  LogOut,
-  PanelsTopLeft,
-  Shield,
-} from "lucide-react";
+import { FileText, LayoutDashboard, LogOut, MessageSquare, Shield, Zap } from "lucide-react";
 import { useAuth } from "../lib/auth";
 
 const NAV_ITEMS = [
   { to: "/", label: "Дашборд", icon: LayoutDashboard, end: true },
-  { to: "/section-1", label: "Раздел 1", icon: Boxes },
-  { to: "/section-2", label: "Раздел 2", icon: Layers },
-  { to: "/section-3", label: "Раздел 3", icon: PanelsTopLeft },
+  { to: "/messages", label: "Сообщения", icon: MessageSquare },
+  { to: "/templates", label: "Шаблоны", icon: FileText },
+  { to: "/events", label: "События", icon: Zap },
 ];
 
 export function Sidebar() {

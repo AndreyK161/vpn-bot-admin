@@ -5,7 +5,14 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { ApiError, apiFetch, clearToken, getToken, setToken } from "./api";
+import {
+  ApiError,
+  apiFetch,
+  clearTokens,
+  getAccessToken,
+  getRefreshToken,
+  setTokens,
+} from "./api";
 
 type User = {
   id: number;
@@ -27,30 +34,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token = getToken();
-    if (!token) {
+    function handleAuthExpired() {
+      setUser(null);
+    }
+    window.addEventListener("auth:expired", handleAuthExpired);
+    return () => window.removeEventListener("auth:expired", handleAuthExpired);
+  }, []);
+
+  useEffect(() => {
+    if (!getAccessToken()) {
       setLoading(false);
       return;
     }
     apiFetch<User>("/api/auth/me")
       .then(setUser)
-      .catch(() => clearToken())
+      .catch(() => clearTokens())
       .finally(() => setLoading(false));
   }, []);
 
   async function login(email: string, password: string) {
-    const { access_token } = await apiFetch<{ access_token: string }>(
-      "/api/auth/login",
-      { method: "POST", body: JSON.stringify({ email, password }) },
-    );
-    setToken(access_token);
+    const { access_token, refresh_token } = await apiFetch<{
+      access_token: string;
+      refresh_token: string;
+    }>("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    });
+    setTokens(access_token, refresh_token);
     const me = await apiFetch<User>("/api/auth/me");
     setUser(me);
   }
 
   function logout() {
-    clearToken();
+    const refreshToken = getRefreshToken();
+    clearTokens();
     setUser(null);
+    if (refreshToken) {
+      // best-effort — отзываем refresh-токен на сервере, не блокируя выход
+      apiFetch("/api/auth/logout", {
+        method: "POST",
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      }).catch(() => {});
+    }
   }
 
   return (

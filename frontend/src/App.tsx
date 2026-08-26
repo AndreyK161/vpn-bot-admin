@@ -1,10 +1,11 @@
 import { Route, Routes } from "react-router-dom";
-import { Boxes, Layers, PanelsTopLeft } from "lucide-react";
 import { AppLayout } from "./layouts/AppLayout";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { Dashboard } from "./pages/Dashboard";
+import { Events } from "./pages/Events";
 import { Login } from "./pages/Login";
-import { SectionPlaceholder } from "./pages/SectionPlaceholder";
+import { Messages } from "./pages/Messages";
+import { Templates } from "./pages/Templates";
 
 export default function App() {
   return (
@@ -14,18 +15,9 @@ export default function App() {
       <Route element={<ProtectedRoute />}>
         <Route element={<AppLayout />}>
           <Route index element={<Dashboard />} />
-          <Route
-            path="section-1"
-            element={<SectionPlaceholder title="Раздел 1" icon={Boxes} />}
-          />
-          <Route
-            path="section-2"
-            element={<SectionPlaceholder title="Раздел 2" icon={Layers} />}
-          />
-          <Route
-            path="section-3"
-            element={<SectionPlaceholder title="Раздел 3" icon={PanelsTopLeft} />}
-          />
+          <Route path="messages" element={<Messages />} />
+          <Route path="templates" element={<Templates />} />
+          <Route path="events" element={<Events />} />
         </Route>
       </Route>
     </Routes>

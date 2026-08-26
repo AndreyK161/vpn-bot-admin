@@ -14,7 +14,10 @@ class Settings(BaseSettings):
 
     jwt_secret_key: str = "change-me-in-production"
     jwt_algorithm: str = "HS256"
-    jwt_expires_minutes: int = 60 * 24
+    jwt_access_expires_minutes: int = 30
+    jwt_refresh_expires_days: int = 30
+
+    bot_api_key: str = "change-me-bot-api-key"
 
     @property
     def database_url(self) -> str:
