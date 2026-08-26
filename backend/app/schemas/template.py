@@ -9,6 +9,7 @@ class TemplateOut(BaseModel):
     title: str
     text: str
     event_type: str | None
+    template_type: str
     is_active: bool
     created_at: datetime
     updated_at: datetime
@@ -26,6 +27,7 @@ class TemplateCreate(BaseModel):
     title: str
     text: str
     event_type: str | None = None
+    template_type: str = "regular"
     is_active: bool = True
 
 
@@ -33,6 +35,7 @@ class TemplateUpdate(BaseModel):
     title: str | None = None
     text: str | None = None
     event_type: str | None = None
+    template_type: str | None = None
     is_active: bool | None = None
 
 

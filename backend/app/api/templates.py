@@ -32,6 +32,12 @@ async def list_templates(
     return TemplateListResponse(items=items, total=total)
 
 
+def _integrity_error_detail(exc: IntegrityError, key: str, template_type: str) -> str:
+    if "template_type" in str(exc.orig):
+        return f"Тип шаблона {template_type!r} не существует — сначала создай его"
+    return f"Шаблон с ключом {key!r} уже существует"
+
+
 @router.post("", response_model=TemplateOut, status_code=status.HTTP_201_CREATED)
 async def create_template(
     payload: TemplateCreate, db: AsyncSession = Depends(get_db)
@@ -44,7 +50,7 @@ async def create_template(
         await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Шаблон с ключом {payload.key!r} уже существует",
+            detail=_integrity_error_detail(exc, payload.key, payload.template_type),
         ) from exc
     await db.refresh(template)
     return TemplateOut.model_validate(template)
@@ -61,7 +67,14 @@ async def update_template(
     for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(template, field, value)
 
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=_integrity_error_detail(exc, template.key, template.template_type),
+        ) from exc
     await db.refresh(template)
     return TemplateOut.model_validate(template)
 

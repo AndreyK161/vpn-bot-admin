@@ -1,10 +1,9 @@
 import { NavLink, useNavigate } from "react-router-dom";
-import { FileText, LayoutDashboard, LogOut, MessageSquare, Shield, Zap } from "lucide-react";
+import { FileText, LayoutDashboard, LogOut, Shield, Zap } from "lucide-react";
 import { useAuth } from "../lib/auth";
 
 const NAV_ITEMS = [
   { to: "/", label: "Дашборд", icon: LayoutDashboard, end: true },
-  { to: "/messages", label: "Сообщения", icon: MessageSquare },
   { to: "/templates", label: "Шаблоны", icon: FileText },
   { to: "/events", label: "События", icon: Zap },
 ];

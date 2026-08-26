@@ -1,20 +1,14 @@
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import verify_bot_api_key
 from app.core.database import get_db
-from app.models.bot_event import BotEvent, BotMessage
+from app.models.bot_event import BotEvent
 from app.models.message_template import MessageTemplate
-from app.schemas.bot import (
-    IngestEventRequest,
-    IngestEventResponse,
-    IngestMessageRequest,
-    IngestMessageResponse,
-)
+from app.schemas.bot import IngestEventRequest, IngestEventResponse
 from app.schemas.template import TemplatePublicOut
 
 router = APIRouter(
@@ -49,31 +43,6 @@ async def convert_event(event_id: int, db: AsyncSession = Depends(get_db)) -> No
     event.converted = True
     event.converted_at = datetime.now(timezone.utc)
     await db.commit()
-
-
-@router.post("/messages", response_model=IngestMessageResponse)
-async def ingest_message(
-    payload: IngestMessageRequest, db: AsyncSession = Depends(get_db)
-) -> IngestMessageResponse:
-    event_type = payload.event_type
-    if payload.event_id is not None and event_type is None:
-        event = await db.get(BotEvent, payload.event_id)
-        if event is not None:
-            event_type = event.event_type
-
-    message = BotMessage(
-        telegram_user_id=payload.telegram_user_id,
-        username=payload.username,
-        chat_id=payload.chat_id,
-        text=payload.text,
-        message_type=payload.message_type,
-        event_id=payload.event_id,
-        event_type=event_type,
-    )
-    db.add(message)
-    await db.commit()
-    await db.refresh(message)
-    return IngestMessageResponse(id=message.id)
 
 
 @router.get("/templates/{key}", response_model=TemplatePublicOut)
