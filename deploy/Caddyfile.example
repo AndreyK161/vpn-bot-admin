@@ -1,0 +1,14 @@
+# Пример блока для /etc/caddy/Caddyfile — добавь его туда (не заменяй весь файл,
+# у тебя там уже есть другие сайты/поддомены) и поменяй домен + путь на свои.
+
+admin.your-domain.example {
+    handle /api/* {
+        reverse_proxy 127.0.0.1:8110
+    }
+
+    handle {
+        root * /home/zadkiel/apps/vpn-bot-admin/frontend/dist
+        try_files {path} /index.html
+        file_server
+    }
+}
