@@ -8,7 +8,12 @@ from app.api.deps import verify_bot_api_key
 from app.core.database import get_db
 from app.models.bot_event import BotEvent
 from app.models.message_template import MessageTemplate
-from app.schemas.bot import IngestEventRequest, IngestEventResponse
+from app.schemas.bot import (
+    IngestEventRequest,
+    IngestEventResponse,
+    IngestTemplateSyncRequest,
+    IngestTemplateSyncResponse,
+)
 from app.schemas.template import TemplatePublicOut
 
 router = APIRouter(
@@ -56,3 +61,34 @@ async def get_template(key: str, db: AsyncSession = Depends(get_db)) -> Template
     if template is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Шаблон не найден")
     return TemplatePublicOut(key=template.key, text=template.text)
+
+
+@router.post("/templates/sync", response_model=IngestTemplateSyncResponse)
+async def sync_templates(
+    payload: IngestTemplateSyncRequest, db: AsyncSession = Depends(get_db)
+) -> IngestTemplateSyncResponse:
+    """Заводит в админке шаблоны, которых там ещё нет — не трогает существующие,
+    чтобы не затирать правки, сделанные через UI."""
+    existing_keys = set(
+        (await db.execute(select(MessageTemplate.key))).scalars().all()
+    )
+
+    created: list[str] = []
+    skipped: list[str] = []
+    for item in payload.items:
+        if item.key in existing_keys:
+            skipped.append(item.key)
+            continue
+        db.add(
+            MessageTemplate(
+                key=item.key,
+                title=item.title,
+                text=item.text,
+                event_type=item.event_type,
+                template_type=item.template_type,
+            )
+        )
+        created.append(item.key)
+
+    await db.commit()
+    return IngestTemplateSyncResponse(created=created, skipped=skipped)

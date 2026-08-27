@@ -38,3 +38,20 @@ class EventTypeStats(BaseModel):
     converted: int
     conversion_rate: float
     last_occurred_at: datetime | None
+
+
+class IngestTemplateSyncItem(BaseModel):
+    key: str
+    title: str
+    text: str
+    event_type: str | None = None
+    template_type: str = "regular"
+
+
+class IngestTemplateSyncRequest(BaseModel):
+    items: list[IngestTemplateSyncItem]
+
+
+class IngestTemplateSyncResponse(BaseModel):
+    created: list[str]
+    skipped: list[str]
