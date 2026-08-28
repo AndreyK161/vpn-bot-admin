@@ -77,8 +77,8 @@ export function Templates() {
           </button>
         </div>
 
-        <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)]">
-          <table className="w-full text-left text-sm">
+        <div className="overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--surface)]">
+          <table className="w-full min-w-[960px] text-left text-sm">
             <thead>
               <tr className="border-b border-[var(--border)] text-xs text-[var(--text-muted)]">
                 <th className="px-4 py-2.5 font-medium">Key</th>
