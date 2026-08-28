@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { Pencil, Plus, X } from "lucide-react";
+import { ChevronDown, Pencil, Plus, X } from "lucide-react";
 import { Topbar } from "../components/Topbar";
 import { ApiError, apiFetch } from "../lib/api";
 import { formatDateTime } from "../lib/format";
@@ -77,6 +77,16 @@ export function Templates() {
   const [templateTypes, setTemplateTypes] = useState<TemplateTypeItem[]>([]);
   const [editing, setEditing] = useState<MessageTemplate | null>(null);
   const [creating, setCreating] = useState(false);
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+
+  function toggleGroup(label: string) {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) next.delete(label);
+      else next.add(label);
+      return next;
+    });
+  }
 
   function loadTypes() {
     apiFetch<TemplateTypeItem[]>("/api/template-types").then(setTemplateTypes);
@@ -158,19 +168,29 @@ export function Templates() {
         )}
 
         <div className="flex flex-col gap-6">
-          {grouped.map((group) => (
+          {grouped.map((group) => {
+            const isCollapsed = collapsed.has(group.label);
+            return (
             <div key={group.label}>
-              <h3 className="mb-2 flex items-baseline gap-2 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+              <button
+                type="button"
+                onClick={() => toggleGroup(group.label)}
+                className="mb-2 flex w-full items-center gap-1.5 text-left text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]"
+              >
+                <ChevronDown
+                  className={`h-3.5 w-3.5 shrink-0 transition-transform ${isCollapsed ? "-rotate-90" : ""}`}
+                  strokeWidth={2.5}
+                />
                 {group.label}
                 <span className="font-normal normal-case text-[var(--text-muted)]/70">
                   {group.items.length}
                 </span>
-              </h3>
+              </button>
+              {!isCollapsed && (
               <div className="overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--surface)]">
                 <table className="w-full min-w-[960px] text-left text-sm">
                   <thead>
                     <tr className="border-b border-[var(--border)] text-xs text-[var(--text-muted)]">
-                      <th className="px-4 py-2.5 font-medium">Key</th>
                       <th className="px-4 py-2.5 font-medium">Название</th>
                       <th className="px-4 py-2.5 font-medium">Тип</th>
                       <th className="px-4 py-2.5 font-medium">Событие</th>
@@ -188,9 +208,6 @@ export function Templates() {
                       const stats = statsByEventType[t.event_type || t.key];
                       return (
                         <tr key={t.id} className="border-b border-[var(--border)] last:border-0">
-                          <td className="whitespace-nowrap px-4 py-2.5 font-mono text-xs text-[var(--text)]">
-                            {t.key}
-                          </td>
                           <td className="px-4 py-2.5 text-[var(--text)]">{t.title}</td>
                           <td className="whitespace-nowrap px-4 py-2.5">
                             <span
@@ -252,8 +269,10 @@ export function Templates() {
                   </tbody>
                 </table>
               </div>
+              )}
             </div>
-          ))}
+            );
+          })}
         </div>
       </main>
 
