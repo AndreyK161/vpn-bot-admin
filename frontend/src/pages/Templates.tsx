@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Pencil, Plus, X } from "lucide-react";
 import { Topbar } from "../components/Topbar";
 import { ApiError, apiFetch } from "../lib/api";
@@ -20,13 +20,59 @@ const EMPTY_FORM: TemplateInput = {
   is_active: true,
 };
 
-const PAGE_SIZE = 20;
+// Шаблонов немного (десятки, не тысячи) — проще забрать всё разом и группировать
+// на фронте, чем городить пагинацию с разбивкой по разделам.
+const FETCH_LIMIT = 200;
+
+// Раздел бота определяется по паттерну в key — эвристика, не хранится в БД.
+// Новые ключи, которые не подошли ни под один паттерн, попадают в "Прочее" —
+// это не ошибка, просто пока не размечено.
+const CATEGORY_RULES: { label: string; test: (key: string) => boolean }[] = [
+  { label: "Кнопки", test: (k) => k.includes("BUTTON") },
+  { label: "Реферальная программа", test: (k) => k.includes("REFERRAL") },
+  { label: "Автосписание", test: (k) => k.includes("AUTOPAY") || k.includes("RECURRENT") },
+  {
+    label: "Уведомления об окончании подписки",
+    test: (k) => k.startsWith("NOTIFY_") || k === "RENEW",
+  },
+  {
+    label: "Тарифы и оплата",
+    test: (k) =>
+      k.includes("TARIFF") || k.includes("PRICE") || k.includes("PAYMENT") || k.includes("INVOICE"),
+  },
+  {
+    label: "Установка и устройства",
+    test: (k) =>
+      k.includes("INSTALL") ||
+      k.includes("DEVICE") ||
+      ["ANDROID", "IOS", "WINDOWS", "MACOS"].some((d) => k.includes(d)),
+  },
+  { label: "Профиль и ключ", test: (k) => k.includes("PROFILE") || k === "YOUR_KEY" },
+  {
+    label: "Приветствие и системные",
+    test: (k) => k.includes("WELCOME") || k === "TECHNICAL_WORK_MESSAGE" || k === "SOMETHING_WRONG",
+  },
+  {
+    label: "Поддержка и вопросы",
+    test: (k) =>
+      k.includes("QUESTION") ||
+      k.includes("ANSWER") ||
+      k.includes("SUPPORT") ||
+      k.includes("BLOCK_ADULT") ||
+      k.includes("WL_"),
+  },
+];
+
+function categoryOf(key: string): string {
+  return CATEGORY_RULES.find((rule) => rule.test(key))?.label ?? "Прочее";
+}
+
+const CATEGORY_ORDER = [...CATEGORY_RULES.map((r) => r.label), "Прочее"];
 
 export function Templates() {
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
-  const [total, setTotal] = useState(0);
-  const [offset, setOffset] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
   const [statsByEventType, setStatsByEventType] = useState<Record<string, EventTypeStats>>({});
   const [templateTypes, setTemplateTypes] = useState<TemplateTypeItem[]>([]);
   const [editing, setEditing] = useState<MessageTemplate | null>(null);
@@ -39,24 +85,45 @@ export function Templates() {
   function load() {
     setLoading(true);
     Promise.all([
-      apiFetch<TemplateListResponse>(`/api/templates?limit=${PAGE_SIZE}&offset=${offset}`),
+      apiFetch<TemplateListResponse>(`/api/templates?limit=${FETCH_LIMIT}&offset=0`),
       apiFetch<EventTypeStats[]>("/api/events/stats"),
     ])
       .then(([templatesRes, statsRes]) => {
         setTemplates(templatesRes.items);
-        setTotal(templatesRes.total);
         setStatsByEventType(Object.fromEntries(statsRes.map((s) => [s.event_type, s])));
       })
       .finally(() => setLoading(false));
   }
 
-  useEffect(load, [offset]);
+  useEffect(load, []);
   useEffect(loadTypes, []);
 
   const typeLabel = (key: string) => templateTypes.find((t) => t.key === key)?.label ?? key;
 
-  const from = total === 0 ? 0 : offset + 1;
-  const to = Math.min(offset + PAGE_SIZE, total);
+  const grouped = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    const filtered = query
+      ? templates.filter(
+          (t) =>
+            t.key.toLowerCase().includes(query) ||
+            t.title.toLowerCase().includes(query) ||
+            t.text.toLowerCase().includes(query),
+        )
+      : templates;
+
+    const byCategory = new Map<string, MessageTemplate[]>();
+    for (const t of filtered) {
+      const category = categoryOf(t.key);
+      if (!byCategory.has(category)) byCategory.set(category, []);
+      byCategory.get(category)!.push(t);
+    }
+
+    return CATEGORY_ORDER.map((label) => ({ label, items: byCategory.get(label) ?? [] })).filter(
+      (g) => g.items.length > 0,
+    );
+  }, [templates, search]);
+
+  const totalShown = grouped.reduce((sum, g) => sum + g.items.length, 0);
 
   return (
     <>
@@ -66,133 +133,127 @@ export function Templates() {
       />
 
       <main className="flex-1 overflow-y-auto px-6 py-6">
-        <div className="mb-4 flex justify-end">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Поиск по ключу, названию или тексту..."
+            className="w-full max-w-sm rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-sm text-[var(--text)] outline-none focus:border-[var(--accent)]"
+          />
           <button
             type="button"
             onClick={() => setCreating(true)}
-            className="flex items-center gap-1.5 rounded-lg bg-[var(--accent)] px-3 py-1.5 text-sm font-medium text-white hover:opacity-90"
+            className="flex shrink-0 items-center gap-1.5 rounded-lg bg-[var(--accent)] px-3 py-1.5 text-sm font-medium text-white hover:opacity-90"
           >
             <Plus className="h-4 w-4" strokeWidth={2.25} />
             Новый шаблон
           </button>
         </div>
 
-        <div className="overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--surface)]">
-          <table className="w-full min-w-[960px] text-left text-sm">
-            <thead>
-              <tr className="border-b border-[var(--border)] text-xs text-[var(--text-muted)]">
-                <th className="px-4 py-2.5 font-medium">Key</th>
-                <th className="px-4 py-2.5 font-medium">Название</th>
-                <th className="px-4 py-2.5 font-medium">Тип</th>
-                <th className="px-4 py-2.5 font-medium">Событие</th>
-                <th className="px-4 py-2.5 font-medium">Статистика</th>
-                <th className="px-4 py-2.5 font-medium">Статус</th>
-                <th className="px-4 py-2.5 font-medium">Обновлён</th>
-                <th className="px-4 py-2.5 font-medium" />
-              </tr>
-            </thead>
-            <tbody>
-              {templates.map((t) => {
-                // Бот шлёт событие с event_type = key шаблона; явное поле "Событие"
-                // на шаблоне — необязательный override для случаев, когда ключ и
-                // событие называются по-разному (например, кастомные фидбек-кампании).
-                const stats = statsByEventType[t.event_type || t.key];
-                return (
-                  <tr key={t.id} className="border-b border-[var(--border)] last:border-0">
-                    <td className="whitespace-nowrap px-4 py-2.5 font-mono text-xs text-[var(--text)]">
-                      {t.key}
-                    </td>
-                    <td className="px-4 py-2.5 text-[var(--text)]">{t.title}</td>
-                    <td className="whitespace-nowrap px-4 py-2.5">
-                      <span
-                        className={
-                          t.template_type === "alert"
-                            ? "rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-[var(--danger)]"
-                            : "rounded-full bg-[var(--bg)] px-2 py-0.5 text-xs font-medium text-[var(--text-muted)]"
-                        }
-                      >
-                        {typeLabel(t.template_type)}
-                      </span>
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-2.5">
-                      {t.event_type ? (
-                        <span className="rounded-full bg-[var(--accent-soft)] px-2 py-0.5 text-xs font-medium text-[var(--accent)]">
-                          {t.event_type}
-                        </span>
-                      ) : (
-                        <span className="text-xs text-[var(--text-muted)]">—</span>
-                      )}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-2.5 text-xs">
-                      {stats ? (
-                        <span className="text-[var(--text)]">
-                          {stats.total} отправлено
-                          {stats.converted > 0 && ` · ${stats.converted} исп. (${stats.conversion_rate}%)`}
-                        </span>
-                      ) : (
-                        <span className="text-[var(--text-muted)]">—</span>
-                      )}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-2.5">
-                      <span
-                        className={
-                          t.is_active
-                            ? "rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-[var(--success)]"
-                            : "rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-[var(--danger)]"
-                        }
-                      >
-                        {t.is_active ? "активен" : "отключён"}
-                      </span>
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-2.5 text-xs text-[var(--text-muted)]">
-                      {formatDateTime(t.updated_at)}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-2.5 text-right">
-                      <button
-                        type="button"
-                        onClick={() => setEditing(t)}
-                        className="flex h-7 w-7 items-center justify-center rounded-md text-[var(--text-muted)] hover:bg-[var(--bg)] hover:text-[var(--text)]"
-                      >
-                        <Pencil className="h-3.5 w-3.5" strokeWidth={2} />
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-
-              {!loading && templates.length === 0 && (
-                <tr>
-                  <td colSpan={8} className="px-4 py-10 text-center text-sm text-[var(--text-muted)]">
-                    Шаблонов пока нет — добавь дефолтные сообщения бота вручную
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="mt-3 flex items-center justify-between text-xs text-[var(--text-muted)]">
-          <span>
-            {total > 0 ? `${from}–${to} из ${total}` : loading ? "Загрузка..." : "0 из 0"}
-          </span>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              disabled={offset === 0}
-              onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
-              className="rounded-lg border border-[var(--border)] px-3 py-1.5 font-medium text-[var(--text)] disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              Назад
-            </button>
-            <button
-              type="button"
-              disabled={offset + PAGE_SIZE >= total}
-              onClick={() => setOffset(offset + PAGE_SIZE)}
-              className="rounded-lg border border-[var(--border)] px-3 py-1.5 font-medium text-[var(--text)] disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              Вперёд
-            </button>
+        {!loading && totalShown === 0 && (
+          <div className="flex h-40 items-center justify-center rounded-xl border border-dashed border-[var(--border)] text-sm text-[var(--text-muted)]">
+            {search ? "Ничего не найдено по запросу" : "Шаблонов пока нет"}
           </div>
+        )}
+
+        <div className="flex flex-col gap-6">
+          {grouped.map((group) => (
+            <div key={group.label}>
+              <h3 className="mb-2 flex items-baseline gap-2 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+                {group.label}
+                <span className="font-normal normal-case text-[var(--text-muted)]/70">
+                  {group.items.length}
+                </span>
+              </h3>
+              <div className="overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--surface)]">
+                <table className="w-full min-w-[960px] text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-[var(--border)] text-xs text-[var(--text-muted)]">
+                      <th className="px-4 py-2.5 font-medium">Key</th>
+                      <th className="px-4 py-2.5 font-medium">Название</th>
+                      <th className="px-4 py-2.5 font-medium">Тип</th>
+                      <th className="px-4 py-2.5 font-medium">Событие</th>
+                      <th className="px-4 py-2.5 font-medium">Статистика</th>
+                      <th className="px-4 py-2.5 font-medium">Статус</th>
+                      <th className="px-4 py-2.5 font-medium">Обновлён</th>
+                      <th className="px-4 py-2.5 font-medium" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {group.items.map((t) => {
+                      // Бот шлёт событие с event_type = key шаблона; явное поле "Событие"
+                      // на шаблоне — необязательный override для случаев, когда ключ и
+                      // событие называются по-разному (например, кастомные фидбек-кампании).
+                      const stats = statsByEventType[t.event_type || t.key];
+                      return (
+                        <tr key={t.id} className="border-b border-[var(--border)] last:border-0">
+                          <td className="whitespace-nowrap px-4 py-2.5 font-mono text-xs text-[var(--text)]">
+                            {t.key}
+                          </td>
+                          <td className="px-4 py-2.5 text-[var(--text)]">{t.title}</td>
+                          <td className="whitespace-nowrap px-4 py-2.5">
+                            <span
+                              className={
+                                t.template_type === "alert"
+                                  ? "rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-[var(--danger)]"
+                                  : "rounded-full bg-[var(--bg)] px-2 py-0.5 text-xs font-medium text-[var(--text-muted)]"
+                              }
+                            >
+                              {typeLabel(t.template_type)}
+                            </span>
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-2.5">
+                            {t.event_type ? (
+                              <span className="rounded-full bg-[var(--accent-soft)] px-2 py-0.5 text-xs font-medium text-[var(--accent)]">
+                                {t.event_type}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-[var(--text-muted)]">—</span>
+                            )}
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-2.5 text-xs">
+                            {stats ? (
+                              <span className="text-[var(--text)]">
+                                {stats.total} отправлено
+                                {stats.converted > 0 &&
+                                  ` · ${stats.converted} исп. (${stats.conversion_rate}%)`}
+                              </span>
+                            ) : (
+                              <span className="text-[var(--text-muted)]">—</span>
+                            )}
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-2.5">
+                            <span
+                              className={
+                                t.is_active
+                                  ? "rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-[var(--success)]"
+                                  : "rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-[var(--danger)]"
+                              }
+                            >
+                              {t.is_active ? "активен" : "отключён"}
+                            </span>
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-2.5 text-xs text-[var(--text-muted)]">
+                            {formatDateTime(t.updated_at)}
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-2.5 text-right">
+                            <button
+                              type="button"
+                              onClick={() => setEditing(t)}
+                              className="flex h-7 w-7 items-center justify-center rounded-md text-[var(--text-muted)] hover:bg-[var(--bg)] hover:text-[var(--text)]"
+                            >
+                              <Pencil className="h-3.5 w-3.5" strokeWidth={2} />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ))}
         </div>
       </main>
 
