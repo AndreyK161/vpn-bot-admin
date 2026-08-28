@@ -93,7 +93,10 @@ export function Templates() {
             </thead>
             <tbody>
               {templates.map((t) => {
-                const stats = t.event_type ? statsByEventType[t.event_type] : undefined;
+                // Бот шлёт событие с event_type = key шаблона; явное поле "Событие"
+                // на шаблоне — необязательный override для случаев, когда ключ и
+                // событие называются по-разному (например, кастомные фидбек-кампании).
+                const stats = statsByEventType[t.event_type || t.key];
                 return (
                   <tr key={t.id} className="border-b border-[var(--border)] last:border-0">
                     <td className="whitespace-nowrap px-4 py-2.5 font-mono text-xs text-[var(--text)]">
