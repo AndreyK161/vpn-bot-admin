@@ -42,3 +42,7 @@ class TemplateUpdate(BaseModel):
 class TemplatePublicOut(BaseModel):
     key: str
     text: str
+
+
+class TemplateListPublicOut(BaseModel):
+    items: list[TemplatePublicOut]

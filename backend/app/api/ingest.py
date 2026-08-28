@@ -14,7 +14,7 @@ from app.schemas.bot import (
     IngestTemplateSyncRequest,
     IngestTemplateSyncResponse,
 )
-from app.schemas.template import TemplatePublicOut
+from app.schemas.template import TemplateListPublicOut, TemplatePublicOut
 
 router = APIRouter(
     prefix="/api/ingest",
@@ -48,6 +48,17 @@ async def convert_event(event_id: int, db: AsyncSession = Depends(get_db)) -> No
     event.converted = True
     event.converted_at = datetime.now(timezone.utc)
     await db.commit()
+
+
+@router.get("/templates", response_model=TemplateListPublicOut)
+async def list_active_templates(db: AsyncSession = Depends(get_db)) -> TemplateListPublicOut:
+    """Массовая выгрузка активных шаблонов — для периодического рефреша кэша на
+    стороне бота, чтобы не дёргать /templates/{key} по одному на каждый ключ."""
+    result = await db.execute(
+        select(MessageTemplate).where(MessageTemplate.is_active.is_(True))
+    )
+    items = [TemplatePublicOut(key=t.key, text=t.text) for t in result.scalars().all()]
+    return TemplateListPublicOut(items=items)
 
 
 @router.get("/templates/{key}", response_model=TemplatePublicOut)

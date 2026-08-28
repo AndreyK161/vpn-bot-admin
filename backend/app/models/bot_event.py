@@ -14,7 +14,7 @@ class BotEvent(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     event_type: Mapped[str] = mapped_column(String(100), index=True)
 
-    telegram_user_id: Mapped[int] = mapped_column(BigInteger, index=True)
+    telegram_user_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True, index=True)
     username: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     payload: Mapped[dict | None] = mapped_column(JSON, nullable=True)

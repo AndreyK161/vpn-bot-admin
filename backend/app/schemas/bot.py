@@ -5,7 +5,7 @@ from pydantic import BaseModel
 
 class IngestEventRequest(BaseModel):
     event_type: str
-    telegram_user_id: int
+    telegram_user_id: int | None = None
     username: str | None = None
     payload: dict | None = None
 
@@ -17,7 +17,7 @@ class IngestEventResponse(BaseModel):
 class EventOut(BaseModel):
     id: int
     event_type: str
-    telegram_user_id: int
+    telegram_user_id: int | None
     username: str | None
     payload: dict | None
     occurred_at: datetime
