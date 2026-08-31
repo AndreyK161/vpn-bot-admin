@@ -1,3 +1,6 @@
+from datetime import datetime, timedelta, timezone
+from typing import Literal
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,15 +14,31 @@ router = APIRouter(
     prefix="/api/events", tags=["events"], dependencies=[Depends(get_current_user)]
 )
 
+Period = Literal["day", "week", "month", "year", "all"]
+
+PERIOD_DELTAS: dict[str, timedelta] = {
+    "day": timedelta(days=1),
+    "week": timedelta(days=7),
+    "month": timedelta(days=30),
+    "year": timedelta(days=365),
+}
+
 
 @router.get("/stats", response_model=list[EventTypeStats])
-async def event_stats(db: AsyncSession = Depends(get_db)) -> list[EventTypeStats]:
+async def event_stats(
+    db: AsyncSession = Depends(get_db), period: Period = "all"
+) -> list[EventTypeStats]:
     stmt = select(
         BotEvent.event_type,
         func.count().label("total"),
         func.sum(case((BotEvent.converted.is_(True), 1), else_=0)).label("converted"),
         func.max(BotEvent.occurred_at).label("last_occurred_at"),
     ).group_by(BotEvent.event_type).order_by(func.count().desc())
+
+    delta = PERIOD_DELTAS.get(period)
+    if delta is not None:
+        since = datetime.now(timezone.utc) - delta
+        stmt = stmt.where(BotEvent.occurred_at >= since)
 
     rows = (await db.execute(stmt)).all()
 
