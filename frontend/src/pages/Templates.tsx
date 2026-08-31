@@ -69,10 +69,21 @@ function categoryOf(key: string): string {
 
 const CATEGORY_ORDER = [...CATEGORY_RULES.map((r) => r.label), "Прочее"];
 
+type Period = "day" | "week" | "month" | "year" | "all";
+
+const PERIOD_OPTIONS: { value: Period; label: string }[] = [
+  { value: "day", label: "День" },
+  { value: "week", label: "Неделя" },
+  { value: "month", label: "Месяц" },
+  { value: "year", label: "Год" },
+  { value: "all", label: "Всё время" },
+];
+
 export function Templates() {
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [period, setPeriod] = useState<Period>("week");
   const [statsByEventType, setStatsByEventType] = useState<Record<string, EventTypeStats>>({});
   const [templateTypes, setTemplateTypes] = useState<TemplateTypeItem[]>([]);
   const [editing, setEditing] = useState<MessageTemplate | null>(null);
@@ -92,21 +103,22 @@ export function Templates() {
     apiFetch<TemplateTypeItem[]>("/api/template-types").then(setTemplateTypes);
   }
 
-  function load() {
+  function loadTemplates() {
     setLoading(true);
-    Promise.all([
-      apiFetch<TemplateListResponse>(`/api/templates?limit=${FETCH_LIMIT}&offset=0`),
-      apiFetch<EventTypeStats[]>("/api/events/stats"),
-    ])
-      .then(([templatesRes, statsRes]) => {
-        setTemplates(templatesRes.items);
-        setStatsByEventType(Object.fromEntries(statsRes.map((s) => [s.event_type, s])));
-      })
+    apiFetch<TemplateListResponse>(`/api/templates?limit=${FETCH_LIMIT}&offset=0`)
+      .then((res) => setTemplates(res.items))
       .finally(() => setLoading(false));
   }
 
-  useEffect(load, []);
+  function loadStats() {
+    apiFetch<EventTypeStats[]>(`/api/events/stats?period=${period}`).then((statsRes) =>
+      setStatsByEventType(Object.fromEntries(statsRes.map((s) => [s.event_type, s]))),
+    );
+  }
+
+  useEffect(loadTemplates, []);
   useEffect(loadTypes, []);
+  useEffect(loadStats, [period]);
 
   const typeLabel = (key: string) => templateTypes.find((t) => t.key === key)?.label ?? key;
 
@@ -143,14 +155,33 @@ export function Templates() {
       />
 
       <main className="flex-1 overflow-y-auto px-6 py-6">
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Поиск по ключу, названию или тексту..."
-            className="w-full max-w-sm rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-sm text-[var(--text)] outline-none focus:border-[var(--accent)]"
-          />
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Поиск по ключу, названию или тексту..."
+              className="w-full max-w-sm rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-sm text-[var(--text)] outline-none focus:border-[var(--accent)]"
+            />
+            <div className="flex gap-1.5">
+              {PERIOD_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setPeriod(option.value)}
+                  title="Период для колонки «Статистика»"
+                  className={
+                    period === option.value
+                      ? "rounded-lg bg-[var(--accent)] px-3 py-1.5 text-sm font-medium text-white"
+                      : "rounded-lg border border-[var(--border)] px-3 py-1.5 text-sm font-medium text-[var(--text)] hover:bg-[var(--bg)]"
+                  }
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
           <button
             type="button"
             onClick={() => setCreating(true)}
@@ -286,7 +317,7 @@ export function Templates() {
           onClose={() => setCreating(false)}
           onSaved={() => {
             setCreating(false);
-            load();
+            loadTemplates();
           }}
         />
       )}
@@ -308,7 +339,7 @@ export function Templates() {
           onClose={() => setEditing(null)}
           onSaved={() => {
             setEditing(null);
-            load();
+            loadTemplates();
           }}
         />
       )}
