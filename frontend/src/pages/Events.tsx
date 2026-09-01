@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Topbar } from "../components/Topbar";
 import { apiFetch } from "../lib/api";
 import { formatDateTime } from "../lib/format";
-import type { EventTypeStats } from "../lib/types";
+import type { EventTypeStats, TemplateListResponse } from "../lib/types";
 
 type Period = "day" | "week" | "month" | "year" | "all";
 
@@ -24,10 +24,43 @@ const CONVERSION_EVENT_TYPES = new Set([
   "nc-yesterday-created",
 ]);
 
-function ConversionRow({ s }: { s: EventTypeStats }) {
+// Человеческие названия для событий, у которых нет своего шаблона в админке —
+// это либо служебные типы уведомлений (см. utils/notifications.py в боте),
+// либо фидбек-события из shredder-action-controll.
+const STATIC_EVENT_LABELS: Record<string, string> = {
+  "subscription-expired": "Подписка закончилась — предложение купить",
+  "3-days-left": "Осталось 3 дня — предложение купить",
+  "1-day-left": "Остался 1 день — предложение купить",
+  "nc-yesterday-created": "Напоминание тем, кто не попробовал",
+  "purchase-success-autopay": "Оплата прошла (автосписание)",
+  "purchase-success-non-autopay": "Оплата прошла (вручную)",
+  trial_feedback: "Фидбек по триалу",
+  trial_feedback_followup: "Фидбек по триалу — напоминание",
+  short_feedback_oneday: "Фидбек — тариф на 1 день",
+  short_feedback_oneday_followup: "Фидбек — тариф на 1 день — напоминание",
+  short_feedback_threedays: "Фидбек — тариф на 3 дня",
+  short_feedback_threedays_followup: "Фидбек — тариф на 3 дня — напоминание",
+  followup: "Фидбек — напоминание",
+};
+
+function EventLabel({ eventType, label }: { eventType: string; label: string }) {
+  if (label === eventType) {
+    return <span className="text-[var(--text)]">{eventType}</span>;
+  }
+  return (
+    <div className="min-w-0">
+      <p className="text-[var(--text)]">{label}</p>
+      <p className="truncate font-mono text-xs text-[var(--text-muted)]">{eventType}</p>
+    </div>
+  );
+}
+
+function ConversionRow({ s, label }: { s: EventTypeStats; label: string }) {
   return (
     <tr className="border-b border-[var(--border)] last:border-0">
-      <td className="px-4 py-3 font-medium text-[var(--text)]">{s.event_type}</td>
+      <td className="px-4 py-3 font-medium">
+        <EventLabel eventType={s.event_type} label={label} />
+      </td>
       <td className="px-4 py-3 text-[var(--text)]">{s.total}</td>
       <td className="px-4 py-3 text-[var(--text)]">{s.converted}</td>
       <td className="px-4 py-3">
@@ -50,10 +83,12 @@ function ConversionRow({ s }: { s: EventTypeStats }) {
   );
 }
 
-function CountRow({ s }: { s: EventTypeStats }) {
+function CountRow({ s, label }: { s: EventTypeStats; label: string }) {
   return (
     <tr className="border-b border-[var(--border)] last:border-0">
-      <td className="px-4 py-3 font-medium text-[var(--text)]">{s.event_type}</td>
+      <td className="px-4 py-3 font-medium">
+        <EventLabel eventType={s.event_type} label={label} />
+      </td>
       <td className="px-4 py-3 text-[var(--text)]">{s.total}</td>
       <td className="whitespace-nowrap px-4 py-3 text-xs text-[var(--text-muted)]">
         {s.last_occurred_at ? formatDateTime(s.last_occurred_at) : "—"}
@@ -64,8 +99,15 @@ function CountRow({ s }: { s: EventTypeStats }) {
 
 export function Events() {
   const [stats, setStats] = useState<EventTypeStats[]>([]);
+  const [templateTitles, setTemplateTitles] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState<Period>("week");
+
+  useEffect(() => {
+    apiFetch<TemplateListResponse>("/api/templates?limit=200").then((res) =>
+      setTemplateTitles(Object.fromEntries(res.items.map((t) => [t.key, t.title]))),
+    );
+  }, []);
 
   useEffect(() => {
     setLoading(true);
@@ -73,6 +115,10 @@ export function Events() {
       .then(setStats)
       .finally(() => setLoading(false));
   }, [period]);
+
+  function labelFor(eventType: string): string {
+    return templateTitles[eventType] ?? STATIC_EVENT_LABELS[eventType] ?? eventType;
+  }
 
   const conversionStats = stats.filter((s) => CONVERSION_EVENT_TYPES.has(s.event_type));
   const countStats = stats.filter((s) => !CONVERSION_EVENT_TYPES.has(s.event_type));
@@ -128,7 +174,7 @@ export function Events() {
                 </thead>
                 <tbody>
                   {conversionStats.map((s) => (
-                    <ConversionRow key={s.event_type} s={s} />
+                    <ConversionRow key={s.event_type} s={s} label={labelFor(s.event_type)} />
                   ))}
                 </tbody>
               </table>
@@ -152,7 +198,7 @@ export function Events() {
                 </thead>
                 <tbody>
                   {countStats.map((s) => (
-                    <CountRow key={s.event_type} s={s} />
+                    <CountRow key={s.event_type} s={s} label={labelFor(s.event_type)} />
                   ))}
                 </tbody>
               </table>

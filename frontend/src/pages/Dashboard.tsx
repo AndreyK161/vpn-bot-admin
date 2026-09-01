@@ -26,13 +26,13 @@ export function Dashboard() {
   // Только предложения купить имеют смысл считать в конверсию — у остальных
   // событий (фидбек, факт оплаты/ошибки) конверсии в принципе не бывает, и
   // если мешать их в одну кучу, общий % будет искусственно занижен.
-  const conversionEventTypes = new Set([
-    "subscription-expired",
-    "3-days-left",
-    "1-day-left",
-    "nc-yesterday-created",
-  ]);
-  const conversionStats = eventStats.filter((s) => conversionEventTypes.has(s.event_type));
+  const conversionEventLabels: Record<string, string> = {
+    "subscription-expired": "Подписка закончилась",
+    "3-days-left": "Осталось 3 дня",
+    "1-day-left": "Остался 1 день",
+    "nc-yesterday-created": "Напоминание не попробовавшим",
+  };
+  const conversionStats = eventStats.filter((s) => s.event_type in conversionEventLabels);
 
   const totalEvents = eventStats.reduce((sum, s) => sum + s.total, 0);
   const offersSent = conversionStats.reduce((sum, s) => sum + s.total, 0);
@@ -118,7 +118,9 @@ export function Dashboard() {
                 conversionStats.map((s) => (
                   <div key={s.event_type}>
                     <div className="flex items-center justify-between text-xs">
-                      <span className="truncate text-[var(--text)]">{s.event_type}</span>
+                      <span className="truncate text-[var(--text)]">
+                        {conversionEventLabels[s.event_type] ?? s.event_type}
+                      </span>
                       <span className="shrink-0 font-medium text-[var(--text-muted)]">
                         {s.converted}/{s.total}
                       </span>
