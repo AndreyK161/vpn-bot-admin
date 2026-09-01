@@ -23,9 +23,21 @@ export function Dashboard() {
       .finally(() => setLoading(false));
   }, []);
 
+  // Только предложения купить имеют смысл считать в конверсию — у остальных
+  // событий (фидбек, факт оплаты/ошибки) конверсии в принципе не бывает, и
+  // если мешать их в одну кучу, общий % будет искусственно занижен.
+  const conversionEventTypes = new Set([
+    "subscription-expired",
+    "3-days-left",
+    "1-day-left",
+    "nc-yesterday-created",
+  ]);
+  const conversionStats = eventStats.filter((s) => conversionEventTypes.has(s.event_type));
+
   const totalEvents = eventStats.reduce((sum, s) => sum + s.total, 0);
-  const totalConverted = eventStats.reduce((sum, s) => sum + s.converted, 0);
-  const overallConversion = totalEvents > 0 ? Math.round((totalConverted / totalEvents) * 100) : null;
+  const offersSent = conversionStats.reduce((sum, s) => sum + s.total, 0);
+  const offersConverted = conversionStats.reduce((sum, s) => sum + s.converted, 0);
+  const overallConversion = offersSent > 0 ? Math.round((offersConverted / offersSent) * 100) : null;
   const activeTemplates = templates.filter((t) => t.is_active).length;
   const alertTemplates = templates.filter((t) => t.template_type === "alert");
 
@@ -53,9 +65,9 @@ export function Dashboard() {
             icon={Siren}
           />
           <StatCard
-            label="Конверсия по событиям"
+            label="Конверсия по предложениям купить"
             value={loading ? "…" : overallConversion === null ? "—" : `${overallConversion}%`}
-            delta={overallConversion === null ? "нет событий" : undefined}
+            delta={overallConversion === null ? "нет предложений" : undefined}
             icon={Zap}
           />
         </div>
@@ -95,15 +107,15 @@ export function Dashboard() {
 
           <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5">
             <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-[var(--text)]">Конверсия по событиям</h2>
+              <h2 className="text-sm font-semibold text-[var(--text)]">Конверсия по предложениям купить</h2>
               <Link to="/events" className="text-xs font-medium text-[var(--accent)]">
                 Все →
               </Link>
             </div>
 
             <div className="mt-3 flex flex-col gap-3">
-              {eventStats.length > 0 ? (
-                eventStats.map((s) => (
+              {conversionStats.length > 0 ? (
+                conversionStats.map((s) => (
                   <div key={s.event_type}>
                     <div className="flex items-center justify-between text-xs">
                       <span className="truncate text-[var(--text)]">{s.event_type}</span>
@@ -121,7 +133,7 @@ export function Dashboard() {
                 ))
               ) : (
                 <div className="flex h-40 items-center justify-center text-sm text-[var(--text-muted)]">
-                  {loading ? "Загрузка..." : "Событий пока нет"}
+                  {loading ? "Загрузка..." : "Предложений пока не отправляли"}
                 </div>
               )}
             </div>

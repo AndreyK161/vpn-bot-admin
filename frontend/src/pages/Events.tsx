@@ -14,6 +14,54 @@ const PERIOD_OPTIONS: { value: Period; label: string }[] = [
   { value: "all", label: "Всё время" },
 ];
 
+// Только эти события — реальные проактивные предложения купить, у остальных
+// (фидбек по триалу, факт оплаты/ошибки и т.д.) конверсии в принципе не бывает —
+// это просто счётчики "сколько раз отправили", не воронка.
+const CONVERSION_EVENT_TYPES = new Set([
+  "subscription-expired",
+  "3-days-left",
+  "1-day-left",
+  "nc-yesterday-created",
+]);
+
+function ConversionRow({ s }: { s: EventTypeStats }) {
+  return (
+    <tr className="border-b border-[var(--border)] last:border-0">
+      <td className="px-4 py-3 font-medium text-[var(--text)]">{s.event_type}</td>
+      <td className="px-4 py-3 text-[var(--text)]">{s.total}</td>
+      <td className="px-4 py-3 text-[var(--text)]">{s.converted}</td>
+      <td className="px-4 py-3">
+        <div className="flex items-center gap-2">
+          <div className="h-1.5 w-28 overflow-hidden rounded-full bg-[var(--bg)]">
+            <div
+              className="h-full rounded-full bg-[var(--accent)]"
+              style={{ width: `${Math.min(s.conversion_rate, 100)}%` }}
+            />
+          </div>
+          <span className="text-xs font-medium text-[var(--text-muted)]">
+            {s.conversion_rate}%
+          </span>
+        </div>
+      </td>
+      <td className="whitespace-nowrap px-4 py-3 text-xs text-[var(--text-muted)]">
+        {s.last_occurred_at ? formatDateTime(s.last_occurred_at) : "—"}
+      </td>
+    </tr>
+  );
+}
+
+function CountRow({ s }: { s: EventTypeStats }) {
+  return (
+    <tr className="border-b border-[var(--border)] last:border-0">
+      <td className="px-4 py-3 font-medium text-[var(--text)]">{s.event_type}</td>
+      <td className="px-4 py-3 text-[var(--text)]">{s.total}</td>
+      <td className="whitespace-nowrap px-4 py-3 text-xs text-[var(--text-muted)]">
+        {s.last_occurred_at ? formatDateTime(s.last_occurred_at) : "—"}
+      </td>
+    </tr>
+  );
+}
+
 export function Events() {
   const [stats, setStats] = useState<EventTypeStats[]>([]);
   const [loading, setLoading] = useState(true);
@@ -25,6 +73,9 @@ export function Events() {
       .then(setStats)
       .finally(() => setLoading(false));
   }, [period]);
+
+  const conversionStats = stats.filter((s) => CONVERSION_EVENT_TYPES.has(s.event_type));
+  const countStats = stats.filter((s) => !CONVERSION_EVENT_TYPES.has(s.event_type));
 
   return (
     <>
@@ -59,44 +110,53 @@ export function Events() {
           </div>
         )}
 
-        {stats.length > 0 && (
-          <div className="overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--surface)]">
-            <table className="w-full min-w-[720px] text-left text-sm">
-              <thead>
-                <tr className="border-b border-[var(--border)] text-xs text-[var(--text-muted)]">
-                  <th className="px-4 py-2.5 font-medium">Событие</th>
-                  <th className="px-4 py-2.5 font-medium">Отправлено</th>
-                  <th className="px-4 py-2.5 font-medium">Сконвертировано</th>
-                  <th className="px-4 py-2.5 font-medium">Конверсия</th>
-                  <th className="px-4 py-2.5 font-medium">Последнее</th>
-                </tr>
-              </thead>
-              <tbody>
-                {stats.map((s) => (
-                  <tr key={s.event_type} className="border-b border-[var(--border)] last:border-0">
-                    <td className="px-4 py-3 font-medium text-[var(--text)]">{s.event_type}</td>
-                    <td className="px-4 py-3 text-[var(--text)]">{s.total}</td>
-                    <td className="px-4 py-3 text-[var(--text)]">{s.converted}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <div className="h-1.5 w-28 overflow-hidden rounded-full bg-[var(--bg)]">
-                          <div
-                            className="h-full rounded-full bg-[var(--accent)]"
-                            style={{ width: `${Math.min(s.conversion_rate, 100)}%` }}
-                          />
-                        </div>
-                        <span className="text-xs font-medium text-[var(--text-muted)]">
-                          {s.conversion_rate}%
-                        </span>
-                      </div>
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-xs text-[var(--text-muted)]">
-                      {s.last_occurred_at ? formatDateTime(s.last_occurred_at) : "—"}
-                    </td>
+        {conversionStats.length > 0 && (
+          <div className="mb-6">
+            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+              Предложения купить — воронка "отправили → купил"
+            </h3>
+            <div className="overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--surface)]">
+              <table className="w-full min-w-[720px] text-left text-sm">
+                <thead>
+                  <tr className="border-b border-[var(--border)] text-xs text-[var(--text-muted)]">
+                    <th className="px-4 py-2.5 font-medium">Событие</th>
+                    <th className="px-4 py-2.5 font-medium">Отправлено</th>
+                    <th className="px-4 py-2.5 font-medium">Купили</th>
+                    <th className="px-4 py-2.5 font-medium">Конверсия</th>
+                    <th className="px-4 py-2.5 font-medium">Последнее</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {conversionStats.map((s) => (
+                    <ConversionRow key={s.event_type} s={s} />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {countStats.length > 0 && (
+          <div>
+            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+              Прочая статистика — просто счётчики отправок, без конверсии
+            </h3>
+            <div className="overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--surface)]">
+              <table className="w-full min-w-[560px] text-left text-sm">
+                <thead>
+                  <tr className="border-b border-[var(--border)] text-xs text-[var(--text-muted)]">
+                    <th className="px-4 py-2.5 font-medium">Событие</th>
+                    <th className="px-4 py-2.5 font-medium">Отправлено</th>
+                    <th className="px-4 py-2.5 font-medium">Последнее</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {countStats.map((s) => (
+                    <CountRow key={s.event_type} s={s} />
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </main>
