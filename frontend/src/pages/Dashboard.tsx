@@ -84,7 +84,9 @@ export function Dashboard() {
             <div className="mt-3 divide-y divide-[var(--border)]">
               {alertTemplates.length > 0 ? (
                 alertTemplates.map((t) => {
-                  const stats = t.event_type ? statsByEventType[t.event_type] : undefined;
+                  // Бот шлёт событие с event_type = key шаблона; явное поле "Событие"
+                  // на шаблоне — необязательный override (см. Templates.tsx).
+                  const stats = statsByEventType[t.event_type || t.key];
                   return (
                     <div key={t.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
                       <div className="min-w-0">
